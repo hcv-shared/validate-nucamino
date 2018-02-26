@@ -333,7 +333,6 @@ class TestSimpleSubstitutions(unittest.TestCase):
             print(vmtn)
             print(vmtn.org_aa)
             print(vmtn.sub_aa)
-            print(seed)
             raise e
         mtn = next(iter(report['mutations']))
         try:
@@ -342,13 +341,119 @@ class TestSimpleSubstitutions(unittest.TestCase):
             print(e)
             print(mtn)
             print(aln)
-            print(seed)
             raise e
 
-    # @unittest.skip("Takes too long")
+    @unittest.skip("Takes too long")
     def test_simple_subs(self):
         print()
         for i in range(self.iterations):
             if i % 20 == 0 and i > 0:
                 print(i)
             self.check_simple_sub()
+
+
+# ---------------------------------------------------------------------
+# Generate and Work with Indels
+
+def random_nt():
+    return random.choice("GATC")
+
+
+def apply_insertion(seq, pos, ins):
+    return seq[:pos] + ins + seq[pos:]
+
+
+def apply_deletion(seq, pos, count):
+    return seq[:pos] + seq[pos+count:]
+
+
+def random_insertion(seq, max_length=1, gene=None):
+    start, end = GENE_POS[gene]
+    ins_length = random.randint(1, max_length)
+    pos = start + random.randint(1, (end - start - ins_length))
+    ins = "".join(random_nt() for _ in range(ins_length))
+    return (pos, ins)
+
+
+def random_deletion(seq, max_length=1, gene=None):
+    count = random.randint(1, max_length)
+    pos = random.choice(range(len(seq) - count))
+    return (pos, count)
+
+
+class TestIndelGeneration(unittest.TestCase):
+
+    def test_apply_insertion(self):
+        base_seq = "abc"
+        cases = [
+            (0, 'x', 'xabc'),
+            (1, 'x', 'axbc'),
+            (2, 'x', 'abxc'),
+            (3, 'x', 'abcx'),
+        ]
+        for pos, ins, expected in cases:
+            inserted = apply_insertion(base_seq, pos, ins)
+            self.assertEqual(inserted, expected)
+
+    def test_apply_deletion(self):
+        base_seq = "abc"
+        cases = [
+            (0, 1, "bc"),
+            (0, 2, "c"),
+            (0, 3, ""),
+            (1, 1, "ac"),
+            (1, 2, "a"),
+            (2, 1, "ab"),
+        ]
+        for pos, count, expected in cases:
+            deleted = apply_deletion(base_seq, pos, count)
+            self.assertEqual(deleted, expected)
+
+    def check_insertion_generation(self):
+        max_len = random.randint(1, 10)
+        gene = random.choice(GENES)
+        start, end = GENE_POS[gene]
+        rand_pos, rand_ins = random_insertion(
+            "",
+            max_length=max_len,
+            gene=gene,
+        )
+        self.assertLessEqual(start, rand_pos)
+        self.assertLessEqual(rand_pos, end)
+        self.assertLessEqual(len(rand_ins), max_len)
+        self.assertTrue(set(rand_ins).issubset(NUCLEOTIDES))
+
+    @print_seed_on_assertionerror
+    def test_insertion_generation(self):
+        for i in range(100000):
+            self.check_insertion_generation()
+
+    # TODO(nknight): test deltion generation
+
+# ---------------------------------------------------------------------
+# Test Alinger on Indels
+
+class TestInsertions(unittest.TestCase):
+
+
+    def setUp(self):
+        with open("hcv1a.fasta") as inf:
+            _, self.hcv1a_seq = inf.readlines()
+
+    def create_insertion_file(self):
+        gene = 'NS3'
+        ins = random_insertion(
+            self.hcv1a_seq,
+            max_length=1,
+            gene=gene,
+        )
+        applied = apply_insertion(self.hcv1a_seq, *ins)
+        with open("hcv1a_mut.fasta", "w") as outf:
+            outf.writelines([
+                "> HCV1A with insertion {} {}\n".format(*ins),
+                applied,
+            ])
+
+    @print_seed_on_assertionerror
+    def test_make_insertion(self):
+        self.create_insertion_file()
