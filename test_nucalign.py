@@ -21,7 +21,7 @@ class NucAlignment(object):
         with subprocess.Popen(command, stdout=subprocess.PIPE) as nuc_proc:
             outp = nuc_proc.stdout.read()
             return json.loads(outp)
-    
+
     def __init__(self, infilename):
         self.nuc_result = self.nucalign(infilename)
 
@@ -39,11 +39,13 @@ class TestReferenceSequence(unittest.TestCase):
         for mut in muts:
             self.assertEqual(len(mut), 0)
 
-    
+
 # ---------------------------------------------------------------------
 
 GENE_POS = {
-    'NS3': (3420, 5474)
+    'NS3': (3419, 5312),
+    'NS5A': (6257, 7601),
+    'NS5B': (7602, 9374),
 }
 
 NUCLEOTIDES = {'G', 'C', 'T', 'A'}
@@ -95,7 +97,58 @@ def apply_mutation(mut, sequence):
         + sequence[idx+1:]
     )
 
-    
+
+class TestTranslation(unittest.TestCase):
+
+    @staticmethod
+    def translate_hcv1a(start, end):
+        _, hcv1a_nt_seq = open("hcv1a.fasta").readlines()
+        nt_seq = hcv1a_nt_seq[start:end]
+        return Bio.Seq.translate(nt_seq)
+
+    NS3_AA = (
+        "APITAYAQQTRGLLGCIITSLTGRDKNQVEGEVQIVSTATQTFLATCINGVCWTVYHGAGTRTIAS"
+        "PKGPVIQMYTNVDQDLVGWPAPQGSRSLTPCTCGSSDLYLVTRHADVIPVRRRGDSRGSLLSPRPI"
+        "SYLKGSSGGPLLCPAGHAVGLFRAAVCTRGVAKAVDFIPVENLETTMRSPVFTDNSSPPAVPQSFQ"
+        "VAHLHAPTGSGKSTKVPAAYAAQGYKVLVLNPSVAATLGFGAYMSKAHGVDPNIRTGVRTITTGSP"
+        "ITYSTYGKFLADGGCSGGAYDIIICDECHSTDATSILGIGTVLDQAETAGARLVVLATATPPGSVT"
+        "VSHPNIEEVALSTTGEIPFYGKAIPLEVIKGGRHLIFCHSKKKCDELAAKLVALGINAVAYYRGLD"
+        "VSVIPTSGDVVVVSTDALMTGFTGDFDSVIDCNTCVTQTVDFSLDPTFTIETTTLPQDAVSRTQRR"
+        "GRTGRGKPGIYRFVAPGERPSGMFDSSVLCECYDAGCAWYELTPAETTVRLRAYMNTPGLPVCQDH"
+        "LEFWEGVFTGLTHIDAHFLSQTKQSGENFPYLVAYQATVCARAQAPPPSWDQMWKCLIRLKPTLHG"
+        "PTPLLYRLGAVQNEVTLTHPITKYIMTCMSADLEVVT"
+    )
+
+    def test_ns3_aa_translation(self):
+        start, end = GENE_POS['NS3']
+        ns3_aa_seq = self.translate_hcv1a(start, end)
+        self.assertEqual(
+            len(ns3_aa_seq),
+            len(self.NS3_AA),
+            "Expected reference and translated AA seqs to have equal lengths",
+        )
+        self.assertEqual(ns3_aa_seq, self.NS3_AA)
+
+    NS5A_AA = (
+        "SGSWLRDIWDWICEVLSDFKTWLKAKLMPQLPGIPFVSCQRGYRGVWRGDGIMHTRCHCGAEITGHV"
+        "KNGTMRIVGPRTCRNMWSGTFPINAYTTGPCTPLPAPNYKFALWRVSAEEYVEIRRVGDFHYVSGM"
+        "TTDNLKCPCQIPSPEFFTELDGVRLHRFAPPCKPLLREEVSFRVGLHEYPVGSQLPCEPEPDVAVL"
+        "TSMLTDPSHITAEAAGRRLARGSPPSMASSSASQLSAPSLKATCTANHDSPDAELIEANLLWRQEM"
+        "GGNITRVESENKVVILDSFDPLVAEEDEREVSVPAEILRKSRRFARALPVWARPDYNPPLVETWKK"
+        "PDYEPPVVHGCPLPPPRSPPVPPPRKKRTVVLTESTLSTALAELATKSFGSSSTSGITGDNTTTSS"
+        "EPAPSGCPPDSDVESYSSMPPLEGEPGDPDLSDGSWSTVSSGADTEDVVCC"
+    )
+
+    def test_ns5a_aa_translation(self):
+        start, end = GENE_POS['NS5A']
+        ns5a_aa_seq = self.translate_hcv1a(start, end)
+        self.assertEqual(
+            len(ns5a_aa_seq),
+            len(self.NS5A_AA),
+            "Expected reference and translated AA seqs to have equal lengths",
+        )
+
+
 class TestRandomness(unittest.TestCase):
 
     def test_gene_pos(self):
@@ -133,11 +186,11 @@ class TestRandomness(unittest.TestCase):
                 "Expected new sequence to contain the mutation",
             )
 
-    def test_codon_idx(self):
+    def test_codon_at(self):
         seq = "abcdef"
         cases = [
             (0, "abc"),
-            (1, "abc"),            
+            (1, "abc"),
             (2, "abc"),
             (3, "def"),
             (4, "def"),
@@ -148,6 +201,8 @@ class TestRandomness(unittest.TestCase):
                 codon_at(idx, seq),
                 expected,
             )
+
+
 # ---------------------------------------------------------------------
 
 def make_mut_in_file(infile, outfile='hcv1a_mut.fasta'):
@@ -212,7 +267,7 @@ class TestSimpleSubstitutions(unittest.TestCase):
             )
 
         tmpl = "{virtmut: <16}{foundmut: <20}{diff: <16}"
-        for i in range(50):
+        for i in range(1):
             mtn, aln = self.check_simple_sub()
             mutations = aln.mutations()
             assert len(mutations) == 1
