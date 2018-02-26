@@ -76,11 +76,13 @@ class Mutation(_Mutation):
         return Bio.Seq.translate(self.sub_cod)
 
     def __str__(self):
-        sub = "{} {} {} {}".format(
+        sub = "{} {} {} {} @ {}".format(
             self.gene,
             self.org_aa,
             self.aa_pos,
             self.sub_aa,
+            self.nt_pos
+
         )
         return "<Mutation {}>".format(sub)
 
@@ -254,12 +256,6 @@ class TestSimpleSubstitutions(unittest.TestCase):
     tmp_filename = "hcv1a_mut.fasta"
     iterations = 1000
 
-    def setUpClass():
-        seed = os.getenv('NUCALIGN_SEED')
-        if seed is None:
-            seed = secrets.token_hex()
-        print("Initializing random with seed: {}".format(seed))
-        random.seed(seed)
 
     def align_simple_sub(self):
         mutation = make_mut_in_file(
@@ -283,7 +279,7 @@ class TestSimpleSubstitutions(unittest.TestCase):
             r for r in alignment.mutations()
             if len(r['mutations']) > 0
         )
-        self.assertEqual(len(reports), 1, "Expected a single mutation report")        
+        self.assertEqual(len(reports), 1, "Expected a single mutation report")
         report = next(iter(reports))
         self.assertEqual(
             len(report['mutations']),
@@ -300,6 +296,11 @@ class TestSimpleSubstitutions(unittest.TestCase):
             self.assertFalse(rep['mutations'], msg)
 
     def check_simple_sub(self):
+        # Put the RNG in a known state so we can reproduce test
+        # failures
+        seed = secrets.token_hex()
+        random.seed(seed)
+
         vmtn, aln = self.align_simple_sub()
         if vmtn.org_aa == vmtn.sub_aa:
             self.check_synonymous_report(aln, vmtn.gene)
@@ -311,6 +312,7 @@ class TestSimpleSubstitutions(unittest.TestCase):
             print(vmtn)
             print(vmtn.org_aa)
             print(vmtn.sub_aa)
+            print(seed)
             raise e
         mtn = next(iter(report['mutations']))
         try:
@@ -319,10 +321,12 @@ class TestSimpleSubstitutions(unittest.TestCase):
             print(e)
             print(mtn)
             print(aln)
+            print(seed)
             raise e
 
     # @unittest.skip("Takes too long")
     def test_simple_subs(self):
+        print()
         for i in range(self.iterations):
             if i % 20 == 0 and i > 0:
                 print(i)
