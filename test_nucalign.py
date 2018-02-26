@@ -10,6 +10,21 @@ import unittest
 import Bio.Seq
 
 
+def print_seed_on_assertionerror(f):
+
+    @functools.wraps(f)
+    def wrapped(*args, **kwargs):
+        seed = secrets.token_hex()
+        random.seed(seed)
+        try:
+            f(*args, **kwargs)
+        except AssertionError as e:
+            print("seed = {}".format(seed))
+            raise e
+
+    return wrapped
+
+
 class NucAlignment(object):
 
     @staticmethod
@@ -295,11 +310,14 @@ class TestSimpleSubstitutions(unittest.TestCase):
             msg = "Unexpected mutation in {}".format(rep)
             self.assertFalse(rep['mutations'], msg)
 
+    @print_seed_on_assertionerror
     def check_simple_sub(self):
         # Put the RNG in a known state so we can reproduce test
         # failures
-        seed = secrets.token_hex()
-        random.seed(seed)
+
+        # Known problem seeds:
+        # 361de016527e1aa70ad1832874493b9c2290b3b78ebe02e36c451673adb26180 (NS5B S 1 * @ 7602)
+        # a7fd60be8525abbc23d82e5c0224b4def33cb13aa52b63ac2259fff553167f0b (NS5A S 1 F @ 6258)
 
         vmtn, aln = self.align_simple_sub()
         if vmtn.org_aa == vmtn.sub_aa:
