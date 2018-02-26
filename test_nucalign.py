@@ -102,7 +102,8 @@ class TestTranslation(unittest.TestCase):
 
     @staticmethod
     def translate_hcv1a(start, end):
-        _, hcv1a_nt_seq = open("hcv1a.fasta").readlines()
+        with open('hcv1a.fasta') as infile:
+            _, hcv1a_nt_seq = infile.readlines()
         nt_seq = hcv1a_nt_seq[start:end]
         return Bio.Seq.translate(nt_seq)
 
