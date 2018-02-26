@@ -65,7 +65,9 @@ class TestReferenceSequence(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------
+# Mutations (SNP)
 
+GENES = ["NS3", "NS5A", "NS5B"]
 GENE_POS = {
     'NS3': (3419, 5312),
     'NS5A': (6257, 7601),
@@ -120,7 +122,7 @@ def codon_at(idx, seq):
     return seq[cod_idx:cod_idx + 3]
 
 
-def random_mutation(seq, gene='NS3'):
+def random_mutation(seq, gene=None):
     start, end = GENE_POS[gene]
     gseq = gene_seq(seq, gene=gene)
     idx = random.choice(range(len(gseq)))
@@ -219,7 +221,7 @@ class TestRandomness(unittest.TestCase):
             ""
         )
         for _ in range(100):
-            gene = random.choice(["NS3", "NS5A", "NS5B"])
+            gene = random.choice(GENES)
             mut = random_mutation(seq, gene=gene)
             applied = apply_mutation(mut, seq)
             self.assertEqual(
@@ -251,11 +253,12 @@ class TestRandomness(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------
+# Substitutions
 
 def make_mut_in_file(infile, outfile='hcv1a_mut.fasta'):
     with open(infile, 'r') as inf:
         inf_header, inf_seq = inf.readlines()
-    gene = random.choice(["NS3", "NS5A", "NS5B"])
+    gene = random.choice(GENES)
     mutation = random_mutation(inf_seq, gene=gene)
     idx = mutation.nt_pos
     outf_header = inf_header.strip() + " with mutation: {}\n".format(mutation)
