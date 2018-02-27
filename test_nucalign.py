@@ -82,6 +82,7 @@ _Mutation = collections.namedtuple(
     ["nt_pos", "aa_pos", "sub_nt", "org_nt", "sub_cod", "org_cod", "gene"],
 )
 
+
 class Mutation(_Mutation):
 
     @property
@@ -129,7 +130,7 @@ def random_mutation(seq, gene=None):
     orig_nt = gseq[idx]
     orig_codon = codon_at(idx, gseq)
     sub = random_substitution(orig_nt)
-    sub_codon = orig_codon[:idx%3] + sub + orig_codon[(idx%3)+1:]
+    sub_codon = orig_codon[:idx % 3] + sub + orig_codon[(idx % 3)+1:]
     return Mutation(
         nt_pos=idx+start,
         aa_pos=idx//3 + 1,
@@ -274,7 +275,6 @@ class TestSimpleSubstitutions(unittest.TestCase):
     tmp_filename = "hcv1a_mut.fasta"
     iterations = 1000
 
-
     def align_simple_sub(self):
         mutation = make_mut_in_file(
             self.reference_file,
@@ -317,7 +317,6 @@ class TestSimpleSubstitutions(unittest.TestCase):
     def check_simple_sub(self):
         # Put the RNG in a known state so we can reproduce test
         # failures
-
         # Known problem seeds:
         # 361de016527e1aa70ad1832874493b9c2290b3b78ebe02e36c451673adb26180 (NS5B S 1 * @ 7602)
         # a7fd60be8525abbc23d82e5c0224b4def33cb13aa52b63ac2259fff553167f0b (NS5A S 1 F @ 6258)
@@ -355,11 +354,39 @@ class TestSimpleSubstitutions(unittest.TestCase):
 # ---------------------------------------------------------------------
 # Generate and Work with Indels
 
+_insertion = collections.namedtuple(
+    "Insertion",
+    [
+        "nt_ins",
+        "nt_pos",
+        "gene",
+    ],
+)
+
+
+class Insertion(_insertion):
+
+    @property
+    def aa_pos(self):
+        start, _ = GENE_POS[self.gene]
+        return (self.nt_pos - start) // 3
+
+    def __str__(self):
+        return "{gene} {pos}>{ins} (NA= {napos})".format(
+            gene=self.gene,
+            pos=self.nt_pos,
+            ins=self.nt_ins,
+            napos=self.aa_pos,
+        )
+
+
 def random_nt():
     return random.choice("GATC")
 
 
-def apply_insertion(seq, pos, ins):
+def apply_insertion(seq, insertion):
+    pos = insertion.nt_pos
+    ins = insertion.nt_ins
     return seq[:pos] + ins + seq[pos:]
 
 
@@ -372,7 +399,11 @@ def random_insertion(seq, max_length=1, gene=None):
     ins_length = random.randint(1, max_length)
     pos = start + random.randint(1, (end - start - ins_length))
     ins = "".join(random_nt() for _ in range(ins_length))
-    return (pos, ins)
+    return Insertion(
+        nt_ins=ins,
+        nt_pos=pos,
+        gene=gene,
+    )
 
 
 def random_deletion(seq, max_length=1, gene=None):
@@ -391,8 +422,9 @@ class TestIndelGeneration(unittest.TestCase):
             (2, 'x', 'abxc'),
             (3, 'x', 'abcx'),
         ]
-        for pos, ins, expected in cases:
-            inserted = apply_insertion(base_seq, pos, ins)
+        for pos, nt_ins, expected in cases:
+            insertion = Insertion(nt_ins=nt_ins, nt_pos=pos, gene=None)
+            inserted = apply_insertion(base_seq, insertion)
             self.assertEqual(inserted, expected)
 
     def test_apply_deletion(self):
@@ -413,47 +445,84 @@ class TestIndelGeneration(unittest.TestCase):
         max_len = random.randint(1, 10)
         gene = random.choice(GENES)
         start, end = GENE_POS[gene]
-        rand_pos, rand_ins = random_insertion(
+        insertion = random_insertion(
             "",
             max_length=max_len,
             gene=gene,
         )
-        self.assertLessEqual(start, rand_pos)
-        self.assertLessEqual(rand_pos, end)
-        self.assertLessEqual(len(rand_ins), max_len)
-        self.assertTrue(set(rand_ins).issubset(NUCLEOTIDES))
+        self.assertLessEqual(start, insertion.nt_pos)
+        self.assertLessEqual(insertion.nt_pos, end)
+        self.assertLessEqual(len(insertion.nt_ins), max_len)
+        self.assertTrue(set(insertion.nt_ins).issubset(NUCLEOTIDES))
 
     @print_seed_on_assertionerror
     def test_insertion_generation(self):
-        for i in range(100000):
+        for i in range(10000):
             self.check_insertion_generation()
 
-    # TODO(nknight): test deltion generation
+    def check_deletion_generation(self):
+        max_count = random.rand_int(1, 10)
+        gene = random.choice(GENES)
+        start, end = GENE_POS[GENE]
+        rand_pos, rand_count = random_deletion(
+            "",
+            max_length=max_length,
+            gene=gene,
+        )
+        self.assertLessEqual(start, rand_pos)
+        self.assertLessEqual(rand_pos, end)
+        self.assertLessEqual(rand_pos + rand_count, end)
+        self.assertLessEqual(rand_count, max_count)
+
+    @print_seed_on_assertionerror
+    def test_deletion_generation(self):
+        for i in range(10000):
+            self.check_insertion_generation()
+
 
 # ---------------------------------------------------------------------
 # Test Alinger on Indels
 
 class TestInsertions(unittest.TestCase):
 
+    tmp_filename = "hcv1a_mut.fasta"
+    iterations = 100000
 
     def setUp(self):
         with open("hcv1a.fasta") as inf:
             _, self.hcv1a_seq = inf.readlines()
 
-    def create_insertion_file(self):
-        gene = 'NS3'
+    def create_file_with_insertion(self):
+        gene = random.choice(GENES)
         ins = random_insertion(
             self.hcv1a_seq,
-            max_length=1,
+            max_length=5,
             gene=gene,
         )
-        applied = apply_insertion(self.hcv1a_seq, *ins)
-        with open("hcv1a_mut.fasta", "w") as outf:
+        applied = apply_insertion(self.hcv1a_seq, ins)
+        with open(self.tmp_filename, "w") as outf:
             outf.writelines([
-                "> HCV1A with insertion {} {}\n".format(*ins),
+                "> HCV1A with insertion {}\n".format(ins),
                 applied,
             ])
+        return ins
+
+    def check_make_insertion_file(self):
+        insertion = self.create_file_with_insertion()
+        pos = insertion.nt_pos
+        ins = insertion.nt_ins
+        with open("hcv1a.fasta") as infile:
+            _, orig = infile.readlines()
+        with open(self.tmp_filename) as infile:
+            _, seq = infile.readlines()
+        self.assertEqual(
+            len(orig) + len(ins),
+            len(seq),
+        )
+
+        self.assertEqual(ins, seq[pos:pos+len(ins)])
 
     @print_seed_on_assertionerror
-    def test_make_insertion(self):
-        self.create_insertion_file()
+    def test_make_insertion_file(self):
+        # for _ in range(self.iterations):
+        self.check_make_insertion_file()
