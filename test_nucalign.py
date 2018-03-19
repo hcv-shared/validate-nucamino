@@ -28,10 +28,10 @@ def print_seed_on_assertionerror(f):
 class NucAlignment(object):
 
     @staticmethod
-    def nucalign(infilename, cmd='hcv1a', gene="NS3", output_format="json"):
+    def _nucalign(infilename, profile='hcv1a', gene="NS3", output_format="json"):
         command = [
-            './nucamino', cmd, '-q',
-            '-g', gene,
+            './nucamino', 'align', profile, gene,
+            '-q',
             '--output-format', output_format,
             '-i', infilename,
         ]
@@ -40,7 +40,7 @@ class NucAlignment(object):
             return json.loads(outp)
 
     def __init__(self, infilename, gene):
-        self.nuc_result = self.nucalign(infilename, gene=gene)
+        self.nuc_result = self._nucalign(infilename, gene=gene)
 
     def mutations(self):
         for gene, results in self.nuc_result.items():
@@ -69,11 +69,14 @@ class TestReferenceSequence(unittest.TestCase):
 
 GENES = ["NS3", "NS5A", "NS5B"]
 GENE_POS = {
-    'NS3': (3419, 5312),
-    'NS5A': (6257, 7601),
-    'NS5B': (7601, 9374),
+    "1a": {"NS3": (3419, 5312), "NS5A": (6257, 7601), "NS5B": (7601, 9377)},
+    "1b": {"NS3": (3419, 5312), "NS5A": (6257, 7598), "NS5B": (7598, 9374)},
+    "2": {"NS3": (3430, 5323), "NS5A": (6268, 7666), "NS5B": (7666, 9442)},
+    "3": {"NS3": (3435, 5328), "NS5A": (6273, 7629), "NS5B": (7629, 9402)},
+    "4": {"NS3": (3418, 5311), "NS5A": (6256, 7591), "NS5B": (7591, 9364)},
+    "5": {"NS3": (3327, 5220), "NS5A": (6165, 7515), "NS5B": (7515, 9291)},
+    "6": {"NS3": (3373, 5266), "NS5A": (6211, 7564), "NS5B": (7564, 9340)},
 }
-
 NUCLEOTIDES = {'G', 'C', 'T', 'A'}
 
 
@@ -105,8 +108,8 @@ class Mutation(_Mutation):
         return "<Mutation {}>".format(sub)
 
 
-def gene_seq(seq, gene=None):
-    start, end = GENE_POS[gene]
+def gene_seq(seq, gene=None, genotype='1a'):
+    start, end = GENE_POS[genotype][gene]
     return seq[start:end]
 
 
@@ -123,8 +126,8 @@ def codon_at(idx, seq):
     return seq[cod_idx:cod_idx + 3]
 
 
-def random_mutation(seq, gene=None):
-    start, end = GENE_POS[gene]
+def random_mutation(seq, gene=None, genotype='1a'):
+    start, end = GENE_POS[genotype][gene]
     gseq = gene_seq(seq, gene=gene)
     idx = random.choice(range(len(gseq)))
     orig_nt = gseq[idx]
@@ -174,7 +177,7 @@ class TestTranslation(unittest.TestCase):
     )
 
     def test_ns3_aa_translation(self):
-        start, end = GENE_POS['NS3']
+        start, end = GENE_POS['1a']['NS3']
         ns3_aa_seq = self.translate_hcv1a(start, end)
         self.assertEqual(
             len(ns3_aa_seq),
@@ -194,7 +197,7 @@ class TestTranslation(unittest.TestCase):
     )
 
     def test_ns5a_aa_translation(self):
-        start, end = GENE_POS['NS5A']
+        start, end = GENE_POS['1a']['NS5A']
         ns5a_aa_seq = self.translate_hcv1a(start, end)
         self.assertEqual(
             len(ns5a_aa_seq),
@@ -342,7 +345,6 @@ class TestSimpleSubstitutions(unittest.TestCase):
             print(aln)
             raise e
 
-    @unittest.skip("Takes too long")
     def test_simple_subs(self):
         print()
         for i in range(self.iterations):
@@ -368,7 +370,7 @@ class Insertion(_insertion):
 
     @property
     def aa_pos(self):
-        start, _ = GENE_POS[self.gene]
+        start, _ = GENE_POS['1a'][self.gene]
         return (self.nt_pos - start) // 3
 
     def __str__(self):
@@ -394,8 +396,8 @@ def apply_deletion(seq, pos, count):
     return seq[:pos] + seq[pos+count:]
 
 
-def random_insertion(seq, max_length=1, gene=None):
-    start, end = GENE_POS[gene]
+def random_insertion(seq, max_length=1, gene=None, genotype='1a'):
+    start, end = GENE_POS[genotype][gene]
     ins_length = random.randint(1, max_length)
     pos = start + random.randint(1, (end - start - ins_length))
     ins = "".join(random_nt() for _ in range(ins_length))
@@ -444,7 +446,7 @@ class TestIndelGeneration(unittest.TestCase):
     def check_insertion_generation(self):
         max_len = random.randint(1, 10)
         gene = random.choice(GENES)
-        start, end = GENE_POS[gene]
+        start, end = GENE_POS['1a'][gene]
         insertion = random_insertion(
             "",
             max_length=max_len,
@@ -463,7 +465,7 @@ class TestIndelGeneration(unittest.TestCase):
     def check_deletion_generation(self):
         max_count = random.rand_int(1, 10)
         gene = random.choice(GENES)
-        start, end = GENE_POS[GENE]
+        start, end = GENE_POS['1a'][gene]
         rand_pos, rand_count = random_deletion(
             "",
             max_length=max_length,
