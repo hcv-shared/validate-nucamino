@@ -1,67 +1,14 @@
 import collections
 import functools
-import json
 import os
 import random
-import secrets
-import subprocess
 import unittest
 
 import Bio.Seq
 
 
-def print_seed_on_assertionerror(f):
-
-    @functools.wraps(f)
-    def wrapped(*args, **kwargs):
-        seed = secrets.token_hex()
-        random.seed(seed)
-        try:
-            f(*args, **kwargs)
-        except AssertionError as e:
-            print("seed = {}".format(seed))
-            raise e
-
-    return wrapped
 
 
-class NucAlignment(object):
-
-    @staticmethod
-    def _nucalign(infilename, profile='hcv1a', gene="NS3", output_format="json"):
-        command = [
-            './nucamino', 'align', profile, gene,
-            '-q',
-            '--output-format', output_format,
-            '-i', infilename,
-        ]
-        with subprocess.Popen(command, stdout=subprocess.PIPE) as nuc_proc:
-            outp = nuc_proc.stdout.read()
-            return json.loads(outp)
-
-    def __init__(self, infilename, gene):
-        self.nuc_result = self._nucalign(infilename, gene=gene)
-
-    def mutations(self):
-        for gene, results in self.nuc_result.items():
-            mtns = [mtn for r in results for mtn in r['Report']['Mutations']]
-            yield {
-                'gene': gene,
-                'mutations': mtns,
-            }
-
-
-class TestReferenceSequence(unittest.TestCase):
-
-    reference_filename = 'hcv1a.fasta'
-
-    def test_no_mutations_in_reference(self):
-        for gene in ['NS3', 'NS5A', 'NS5B']:
-            alignment = NucAlignment(self.reference_filename, gene=gene)
-            reports = list(alignment.mutations())
-            for report in reports:
-                for mut in list(report['mutations']):
-                    self.assertEqual(len(mut), 0)
 
 
 # ---------------------------------------------------------------------
