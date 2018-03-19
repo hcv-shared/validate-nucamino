@@ -1,5 +1,6 @@
 import functools
 import json
+import random
 import secrets
 import subprocess
 
@@ -48,10 +49,10 @@ class NucAlignment(object):
             stdout=subprocess.PIPE,
         )
         outp = align_proc.stdout.decode('utf8')
-        return json.loads(outp)
+        return json.loads(outp), align_proc
 
     def __init__(self, seq, gene, profile):
-        self.nuc_result = self._nucalign(seq, gene=gene, profile=profile)
+        self.nuc_result, self.nuc_proc = self._nucalign(seq, gene=gene, profile=profile)
 
     def mutations(self):
         for gene, results in self.nuc_result.items():
