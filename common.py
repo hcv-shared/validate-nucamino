@@ -23,20 +23,21 @@ def print_seed_on_assertionerror(f):
 class NucAlignment(object):
     "Perform an alignment on a given sequence and store the results"
 
-    @staticmethod
-    def _nucalign(infilename, profile='hcv1a', gene="NS3", output_format="json"):
-        command = [
-            './nucamino', 'align', profile, gene,
-            '-q',
-            '--output-format', output_format,
-            '-i', infilename,
-        ]
-        with subprocess.Popen(command, stdout=subprocess.PIPE) as nuc_proc:
-            outp = nuc_proc.stdout.read()
-            return json.loads(outp)
+    @classmethod
+    def _nucalign(cls, inputseq, profile='hcv1a', gene="NS3"):
+        command = ["./nucamino", "align", profile, gene, "-q", "-f", "json"]
+        if type(inputseq) is not bytes:
+            inputseq = bytes(inputseq, 'utf8')
+        align_proc = subprocess.run(
+            command,
+            input=inputseq,
+            stdout=subprocess.PIPE,
+        )
+        outp = align_proc.stdout.decode('utf8')
+        return json.loads(outp)
 
-    def __init__(self, infilename, gene):
-        self.nuc_result = self._nucalign(infilename, gene=gene)
+    def __init__(self, seq, gene, profile):
+        self.nuc_result = self._nucalign(seq, gene=gene, profile=profile)
 
     def mutations(self):
         for gene, results in self.nuc_result.items():
