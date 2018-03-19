@@ -3,6 +3,7 @@ import unittest
 
 import Bio.SeqIO as seqio
 
+
 class TestReferenceSequence(unittest.TestCase):
 
     references_filename = 'hcv-refs.fasta'
@@ -23,5 +24,6 @@ class TestReferenceSequence(unittest.TestCase):
                 reports = list(alignment.mutations())
                 for report in reports:
                     muts = list(report['mutations'])
-                    msg = "Found mutations in the reference {}".format(genotype)
+                    tmpl = "Found mutations in the reference {}"
+                    msg = tmpl.format(genotype)
                     self.assertEqual(len(muts), 0, msg)

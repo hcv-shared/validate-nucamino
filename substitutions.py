@@ -9,7 +9,16 @@ import common
 
 _Mutation = collections.namedtuple(
     "_Mutation",
-    ["nt_pos", "aa_pos", "sub_nt", "org_nt", "sub_cod", "org_cod", "gene", "genotype"],
+    [
+        "nt_pos",
+        "aa_pos",
+        "sub_nt",
+        "org_nt",
+        "sub_cod",
+        "org_cod",
+        "gene",
+        "genotype",
+    ],
 )
 
 
@@ -146,7 +155,7 @@ class TestRandomness(unittest.TestCase):
             self.assertNotEqual(
                 orig,
                 mut,
-                "Expected `random_substitution` to produce a different nucleotide",
+                "Expected random_substitution to yield a different nucleotide",
             )
 
     def test_apply_mutation(self):

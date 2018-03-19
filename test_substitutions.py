@@ -7,7 +7,6 @@ import common
 import substitutions
 
 
-
 def random_mut_in_seq(seq, genotype):
     gene = random.choice(common.GENES)
     mutation = substitutions.random_mutation(seq, gene, genotype)

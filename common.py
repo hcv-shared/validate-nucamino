@@ -52,7 +52,11 @@ class NucAlignment(object):
         return json.loads(outp), align_proc
 
     def __init__(self, seq, gene, profile):
-        self.nuc_result, self.nuc_proc = self._nucalign(seq, gene=gene, profile=profile)
+        self.nuc_result, self.nuc_proc = self._nucalign(
+            seq,
+            gene=gene,
+            profile=profile,
+        )
 
     def mutations(self):
         for gene, results in self.nuc_result.items():
