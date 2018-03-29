@@ -1,8 +1,12 @@
+import collections
 import functools
 import json
 import random
 import secrets
 import subprocess
+import unittest
+
+import Bio.SeqIO as seqio
 
 
 GENOTYPES = ['1a', '1b', '2', '3', '4', '5', '6']
@@ -65,3 +69,37 @@ class NucAlignment(object):
                 'gene': gene,
                 'mutations': mtns,
             }
+
+
+class TestCaseWithReferenceSeqs(unittest.TestCase):
+
+    reference_file = "hcv-refs.fasta"
+
+    @classmethod
+    def setUpClass(cls):
+        with open(cls.reference_file) as inf:
+            seqs = list(seqio.parse(inf, 'fasta'))
+        cls.reference_seqs = seqs
+        super().setUpClass()
+
+    def check_genotype_failures(self, failures):
+        trial_count = len(self.reference_seqs) * self.iterations
+        if len(failures) / trial_count > 0.001:
+            msg = "More than 0.1% of trials failed ({} / {}".format(
+                len(failures),
+                trial_count,
+            )
+            self.fail()
+        by_gt = collections.Counter(gt for gt, _ in failures)
+        if len(failures) > 0:
+            print("Failure rates:")
+            for gt, failures in by_gt.items():
+                print(f"{gt}  {failures} / {self.iterations}")
+            worst_gt, worst_gt_failures = by_gt.most_common()[0]
+            if worst_gt_failures / self.iterations > 0.01:
+                msg = "{} failed {} / {} of its trials".format(
+                    worst_gt,
+                    worst_gt_failures,
+                    self.iterations,
+                )
+                self.fail(msg)

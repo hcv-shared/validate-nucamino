@@ -1,7 +1,4 @@
 import random
-import unittest
-
-import Bio.SeqIO as seqio
 
 import common
 import substitutions
@@ -21,25 +18,9 @@ def align_simple_sub(seq, genotype):
     return mtn, alignment
 
 
-class TestSimpleSubstitutions(unittest.TestCase):
+class TestSimpleSubstitutions(common.TestCaseWithReferenceSeqs):
 
-    reference_file = "hcv-refs.fasta"
-    iterations = 400
-
-    @classmethod
-    def setUpClass(cls):
-        with open(cls.reference_file) as inf:
-            seqs = list(seqio.parse(inf, 'fasta'))
-        cls.reference_seqs = seqs
-
-    def check_vmtn_mtn(self, vmtn, mtn):
-        self.assertEqual(vmtn.aa_pos, mtn['Position'])
-        self.assertEqual(vmtn.org_aa, mtn['ReferenceText'])
-        self.assertEqual(vmtn.sub_aa, mtn['AminoAcidText'])
-        self.assertIn(
-            vmtn.nt_pos - mtn['NAPosition'],
-            {-1, 0, 1},
-        )
+    iterations = 1000
 
     def check_mutation_report(self, alignment, gene=None):
         reports = list(
@@ -62,24 +43,28 @@ class TestSimpleSubstitutions(unittest.TestCase):
             msg = "Unexpected mutation in {}".format(rep)
             self.assertFalse(rep['mutations'], msg)
 
+    def check_vmtn_mtn(self, vmtn, mtn):
+        self.assertEqual(vmtn.aa_pos, mtn['Position'])
+        self.assertEqual(vmtn.org_aa, mtn['ReferenceText'])
+        self.assertEqual(vmtn.sub_aa, mtn['AminoAcidText'])
+        self.assertIn(
+            vmtn.nt_pos - mtn['NAPosition'],
+            {-1, 0, 1},
+        )
+
     @common.print_seed_on_assertionerror
-    def check_simple_sub(self, seq, genotype):
-        vmtn, aln = align_simple_sub(seq, genotype)
+    def check_simple_sub(self, vmtn, aln):
         if vmtn.org_aa == vmtn.sub_aa:
             self.check_synonymous_report(aln, vmtn.gene)
             return
         report = self.check_mutation_report(aln, gene=vmtn.gene)
         mtn = next(iter(report['mutations']))
-        try:
-            self.check_vmtn_mtn(vmtn, mtn)
-        except AssertionError as e:
-            print(e)
-            print(mtn)
-            print(aln)
-            raise e
+        self.check_vmtn_mtn(vmtn, mtn)
+
 
     def test_simple_subs(self):
         print()
+        failures = []
         for bioseq in self.reference_seqs:
             print("Testing {}".format(bioseq.description))
             seq = str(bioseq.seq)
@@ -87,4 +72,10 @@ class TestSimpleSubstitutions(unittest.TestCase):
             for i in range(self.iterations):
                 if i % 20 == 0 and i > 0:
                     print(i)
-                    self.check_simple_sub(seq, genotype)
+                substitution, aln = align_simple_sub(seq, genotype)
+                try:
+                    self.check_simple_sub(substitution, aln)
+                except AssertionError as e:
+                    print("{} failed for {}".format(genotype, substitution))
+                    failures.append((genotype, substitution))
+        self.check_genotype_failures(failures)
