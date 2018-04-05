@@ -52,6 +52,7 @@ class NucAlignment(object):
             input=inputseq,
             stdout=subprocess.PIPE,
         )
+        align_proc.check_returncode()
         outp = align_proc.stdout.decode('utf8')
         return json.loads(outp), align_proc
 
@@ -63,12 +64,22 @@ class NucAlignment(object):
         )
 
     def mutations(self):
+        muts = []
         for gene, results in self.nuc_result.items():
             mtns = [mtn for r in results for mtn in r['Report']['Mutations']]
-            yield {
+            muts.append({
                 'gene': gene,
                 'mutations': mtns,
-            }
+            })
+        return muts
+
+    @property
+    def report(self):
+        assert len(self.nuc_result) == 1
+        results = next(iter(self.nuc_result.values()))
+        assert len(results) == 1
+        result = results[0]
+        return result['Report']
 
 
 class TestCaseWithReferenceSeqs(unittest.TestCase):
