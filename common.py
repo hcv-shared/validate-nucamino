@@ -23,6 +23,18 @@ GENE_POS = {
 NUCLEOTIDES = {'G', 'C', 'T', 'A'}
 
 
+def load_refseqs(reference_filename="hcv-refs.fasta"):
+    with open(reference_filename) as inf:
+        seqs = list(seqio.parse(inf, 'fasta'))
+    return seqs
+
+
+REFSEQS = {
+    seq.description.split(' ')[-1]: str(seq.seq)
+    for seq in load_refseqs()
+}
+
+
 def print_seed_on_assertionerror(f):
     "Decorate a test to set the rng seed (and print it if the test fails)"
 
@@ -88,29 +100,35 @@ class TestCaseWithReferenceSeqs(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        with open(cls.reference_file) as inf:
-            seqs = list(seqio.parse(inf, 'fasta'))
-        cls.reference_seqs = seqs
+        cls.reference_seqs = load_refseqs(cls.reference_file)
         super().setUpClass()
 
-    def check_genotype_failures(self, failures):
+    def check_genotype_failures(self, failures, label=''):
         trial_count = len(self.reference_seqs) * self.iterations
         if len(failures) / trial_count > 0.001:
-            msg = "More than 0.1% of trials failed ({} / {}".format(
+            msg = "More than 0.1% of trials failed ({} / {}, {:.2f}%)".format(
                 len(failures),
                 trial_count,
+                (len(failures) / trial_count * 100)
             )
-            self.fail()
-        by_gt = collections.Counter(gt for gt, _ in failures)
-        if len(failures) > 0:
-            print("Failure rates:")
-            for gt, failures in by_gt.items():
-                print(f"{gt}  {failures} / {self.iterations}")
-            worst_gt, worst_gt_failures = by_gt.most_common()[0]
-            if worst_gt_failures / self.iterations > 0.01:
-                msg = "{} failed {} / {} of its trials".format(
-                    worst_gt,
-                    worst_gt_failures,
-                    self.iterations,
-                )
-                self.fail(msg)
+            import pickle
+            import secrets
+            # fname = "failures-{}-{}.pickle".format(label, secrets.token_hex(6))
+            fname = "failures-{}.pickle".format(label)
+            with open(fname, 'wb') as failure_file:
+                pickle.dump(failures, failure_file)
+            print(failures)
+            self.fail(msg)
+        # by_gt = collections.Counter(gt for gt, _ in failures)
+        # if len(failures) > 0:
+        #     print("Failure rates:")
+        #     for gt, failures in by_gt.items():
+        #         print(f"{gt}  {failures} / {self.iterations}")
+        #     worst_gt, worst_gt_failures = by_gt.most_common()[0]
+        #     if worst_gt_failures / self.iterations > 0.01:
+        #         msg = "{} failed {} / {} of its trials".format(
+        #             worst_gt,
+        #             worst_gt_failures,
+        #             self.iterations,
+        #         )
+        #         self.fail(msg)

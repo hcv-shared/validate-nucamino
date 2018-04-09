@@ -1,35 +1,11 @@
 import collections
 import random
-import unittest
+
+import Bio.Seq as bioseq
 
 import common
 
-_insertion = collections.namedtuple(
-    "Insertion",
-    [
-        "nt_ins",
-        "nt_pos",
-        "gene",
-    ],
-)
-
-
-class Insertion(_insertion):
-
-    @property
-    def aa_pos(self):
-        start, _ = common.GENE_POS['1a'][self.gene]
-        return (self.nt_pos - start) // 3
-
-    def __str__(self):
-        return "{gene} {pos}>{ins} (NA= {napos})".format(
-            gene=self.gene,
-            pos=self.nt_pos,
-            ins=self.nt_ins,
-            napos=self.aa_pos,
-        )
-
-
+# Set() doesn't support indexing.
 _nucleotides = tuple(common.NUCLEOTIDES)
 
 
@@ -37,97 +13,149 @@ def random_nt():
     return random.choice(_nucleotides)
 
 
-def apply_insertion(seq, insertion):
-    pos = insertion.nt_pos
-    ins = insertion.nt_ins
-    return seq[:pos] + ins + seq[pos:]
+class BaseIndel(object):
+    '''Common properties of insertions and deletions'''
+
+    @property
+    def aa_pos(self):
+        start, _ = common.GENE_POS[self.genotype][self.gene]
+        return (self.nt_pos - start) // 3
+
+    @property
+    def delta_len(self):
+        raise NotImplementedError()
+
+    @property
+    def reference_sequence(self):
+        return common.REFSEQS[self.genotype]
+
+    @property
+    def gene_pos(self):
+        return common.GENE_POS[self.genotype][self.gene]
+
+    @property
+    def reference_gene(self):
+        start, end = self.gene_pos
+        return self.reference_sequence[start:end]
+
+    @property
+    def mutated_sequence(self):
+        ins = getattr(self, "nt_ins", "")
+        skip = getattr(self, "nt_count", 0)
+        seq = self.reference_sequence
+        pos = self.nt_pos
+        return seq[:pos] + ins + seq[pos+skip:]
+
+    @property
+    def mutated_gene(self):
+        start, end = self.gene_pos
+        return self.mutated_sequence[start:end+self.delta_len]
 
 
-def apply_deletion(seq, pos, count):
-    return seq[:pos] + seq[pos+count:]
+_insertion = collections.namedtuple(
+    "Insertion",
+    [
+        "nt_ins",
+        "nt_pos",
+        "gene",
+        "genotype"
+    ],
+)
 
 
-def random_insertion(seq, max_length=1, gene=None, genotype='1a'):
-    start, end = common.GENE_POS[genotype][gene]
-    ins_length = random.randint(1, max_length)
-    pos = start + random.randint(1, (end - start - ins_length))
-    ins = "".join(random_nt() for _ in range(ins_length))
-    return Insertion(
-        nt_ins=ins,
-        nt_pos=pos,
-        gene=gene,
-    )
+class Insertion(_insertion, BaseIndel):
 
-
-def random_deletion(seq, max_length=1, gene=None):
-    count = random.randint(1, max_length)
-    pos = random.choice(range(len(seq) - count))
-    return (pos, count)
-
-
-class TestIndelGeneration(unittest.TestCase):
-
-    def test_apply_insertion(self):
-        base_seq = "abc"
-        cases = [
-            (0, 'x', 'xabc'),
-            (1, 'x', 'axbc'),
-            (2, 'x', 'abxc'),
-            (3, 'x', 'abcx'),
-        ]
-        for pos, nt_ins, expected in cases:
-            insertion = Insertion(nt_ins=nt_ins, nt_pos=pos, gene=None)
-            inserted = apply_insertion(base_seq, insertion)
-            self.assertEqual(inserted, expected)
-
-    def test_apply_deletion(self):
-        base_seq = "abc"
-        cases = [
-            (0, 1, "bc"),
-            (0, 2, "c"),
-            (0, 3, ""),
-            (1, 1, "ac"),
-            (1, 2, "a"),
-            (2, 1, "ab"),
-        ]
-        for pos, count, expected in cases:
-            deleted = apply_deletion(base_seq, pos, count)
-            self.assertEqual(deleted, expected)
-
-    def check_insertion_generation(self):
-        max_len = random.randint(1, 10)
-        gene = random.choice(common.GENES)
-        start, end = common.GENE_POS['1a'][gene]
-        insertion = random_insertion(
-            "",
-            max_length=max_len,
-            gene=gene,
+    def __str__(self):
+        return "Ins: {gene} {pos}>{ins} (AA= {aapos})".format(
+            gene=self.gene,
+            pos=self.nt_pos,
+            ins=self.nt_ins,
+            aapos=self.aa_pos,
         )
-        self.assertLessEqual(start, insertion.nt_pos)
-        self.assertLessEqual(insertion.nt_pos, end)
-        self.assertLessEqual(len(insertion.nt_ins), max_len)
-        self.assertTrue(set(insertion.nt_ins).issubset(common.NUCLEOTIDES))
 
-    @common.print_seed_on_assertionerror
-    def test_insertion_generation(self):
-        for i in range(10000):
-            self.check_insertion_generation()
+    @classmethod
+    def _random(cls, gene, genotype, max_length=1):
+        start, end = common.GENE_POS[genotype][gene]
+        # Only check whole-codon insertions
+        ins_length = 3 * random.randint(1, max_length)
+        pos_candidate = start + random.randint(
+            1 + 6,
+            end - start + ins_length - 6,
+        )  # Keep indels at least 2 codons away from the ends.
 
-    def check_deletion_generation(self):
-        max_count = random.rand_int(1, 10)
-        gene = random.choice(common.GENES)
-        start, end = common.GENE_POS['1a'][gene]
-        rand_pos, rand_count = random_deletion(
-            "",
-            max_length=max_length,
+        def on_codon_boundary(idx):
+            return (idx - start) % 3 == 0
+
+        pos = next(idx for idx in range(pos_candidate, -1, -1)
+                   if on_codon_boundary(idx))
+        ins = "".join(random_nt() for _ in range(ins_length))
+        return cls(
+            nt_ins=ins,
+            nt_pos=pos,
             gene=gene,
+            genotype=genotype,
         )
-        self.assertLessEqual(start, rand_pos)
-        self.assertLessEqual(rand_pos, end)
-        self.assertLessEqual(rand_pos + rand_count, end)
-        self.assertLessEqual(rand_count, max_count)
 
-    @common.print_seed_on_assertionerror
-    def test_deletion_generation(self):
-        for i in range(10000):
-            self.check_insertion_generation()
+    @property
+    def delta_len(self):
+        return len(self.nt_ins)
+
+    @property
+    def aa_ins(self):
+        return bioseq.translate(self.nt_ins)
+
+
+_deletion = collections.namedtuple(
+    "Deletion",
+    [
+        "nt_pos",
+        "gene",
+        "genotype",
+        "nt_count",
+        "orig_nt",
+    ],
+)
+
+
+class Deletion(_deletion, BaseIndel):
+
+    def __str__(self):
+        return "Del: {gene} {orig_nt}{pos}{dels} (AA= {aapos})".format(
+            gene=self.gene,
+            orig_nt=self.orig_nt,
+            pos=self.nt_pos,
+            dels="-" * self.nt_count,
+            aapos=self.aa_pos,
+        )
+
+    @property
+    def delta_len(self):
+        return -1 * self.nt_count
+
+    @classmethod
+    def _random(cls, gene, genotype, max_length=1):
+        start, end = common.GENE_POS[genotype][gene]
+        seq = common.REFSEQS[genotype]
+        del_length = 3 * random.randint(1, max_length)
+        pos_candidate = start + random.randint(
+            1,
+            end - start - del_length,
+        )
+
+        def on_codon_boundary(idx):
+            return (idx - start) % 3 == 0
+
+        pos = next(idx for idx in range(pos_candidate, -1, -1)
+                   if on_codon_boundary(idx))
+        orig_nt = seq[pos:pos+del_length]
+        return cls(
+            nt_pos=pos,
+            gene=gene,
+            genotype=genotype,
+            nt_count=del_length,
+            orig_nt=orig_nt,
+        )
+
+    @property
+    def orig_aa(self):
+        return bioseq.translate(self.orig_nt)
