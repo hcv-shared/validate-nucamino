@@ -8,7 +8,7 @@ import indels
 
 class BaseTestIndel(common.TestCaseWithReferenceSeqs):
 
-    iterations = 10
+    iterations = 100
 
     def check_aligning_indels(self, label):
         failures = []
@@ -98,7 +98,6 @@ class TestInsertions(BaseTestIndel):
             bioseq.translate(aligned),
         )
 
-
     def test_aligning_insertions(self):
         self.check_aligning_indels(label="ins")
 
@@ -107,7 +106,7 @@ class TestDeletions(BaseTestIndel):
 
     def align(self, genotype):
         gene = random.choice(common.GENES)
-        deletion = indels.Deletion._random(gene, genotype, max_length=2)
+        deletion = indels.Deletion._random(gene, genotype, max_length=1)
         mtd = deletion.mutated_sequence
         profile = "hcv" + genotype
         alignment = common.NucAlignment(mtd, gene=gene, profile=profile)

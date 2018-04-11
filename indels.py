@@ -5,7 +5,7 @@ import Bio.Seq as bioseq
 
 import common
 
-# Set() doesn't support indexing.
+# Use a Tuple beccause Set doesn't support indexing.
 _nucleotides = tuple(common.NUCLEOTIDES)
 
 
@@ -119,6 +119,10 @@ _deletion = collections.namedtuple(
 
 class Deletion(_deletion, BaseIndel):
 
+    # Distance from gene boundaries where random deletions won't
+    # generate.
+    buffer = 12
+
     def __str__(self):
         return "Del: {gene} {orig_nt}{pos}{dels} (AA= {aapos})".format(
             gene=self.gene,
@@ -138,8 +142,8 @@ class Deletion(_deletion, BaseIndel):
         seq = common.REFSEQS[genotype]
         del_length = 3 * random.randint(1, max_length)
         pos_candidate = start + random.randint(
-            1,
-            end - start - del_length,
+            1 + cls.buffer,
+            end - start - del_length - cls.buffer,
         )
 
         def on_codon_boundary(idx):
